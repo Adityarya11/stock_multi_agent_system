@@ -179,6 +179,12 @@ The system is designed with modularity and extensibility in mind:
 - **Error Handling**:
   - Handles API rate limits, invalid tickers, and JSON errors, returning user-friendly messages.
 
+## Images
+
+- For reference below are two images
+  - ![CLI response](Images/1.png)
+  - ![WebUI response](Images/2.png)
+
 ## Web Demo
 
 The web demo, implemented in `app.py` using Streamlit, fulfills the Google ADK Web requirement:
