@@ -50,21 +50,10 @@ def get_ticker_price(ticker_symbol):
         print(f"Error fetching price for {ticker_symbol}: {str(e)}")
         return f"Error fetching price for {ticker_symbol}: {str(e)}"
 
-if __name__ == "__main__":
-    sample_ticker = "NVDA"
-    price_data = get_ticker_price(sample_ticker)
-    if isinstance(price_data, dict):
-        print(f"Symbol: {price_data['symbol']}")
-        print(f"Current Price: {price_data['price']}")
-        print(f"Change Percent: {price_data['change_percent']}")
-    else:
-        print(price_data)
-
 
 #####################################       Checking the Functionality of the code       #####################################
-# if __name__ == '__main__':
-#     # Example usage:
-#     sample_ticker = "NVDA" # From identify_ticker
+# if __name__ == "__main__":
+#     sample_ticker = "NVDA"
 #     price_data = get_ticker_price(sample_ticker)
 #     if isinstance(price_data, dict):
 #         print(f"Symbol: {price_data['symbol']}")
@@ -72,7 +61,3 @@ if __name__ == "__main__":
 #         print(f"Change Percent: {price_data['change_percent']}")
 #     else:
 #         print(price_data)
-
-#     sample_ticker_invalid = "NONEXISTENTTICKER"
-#     price_data_invalid = get_ticker_price(sample_ticker_invalid)
-#     print(price_data_invalid)
