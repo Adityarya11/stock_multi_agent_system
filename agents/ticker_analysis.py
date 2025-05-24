@@ -1,11 +1,20 @@
 from agents.ticker_news import get_ticker_news
 from agents.ticker_price_change import get_ticker_price_change
 
-def analyze_ticker(ticker_symbol, timeframe_for_change="last 7 days", news_limit=3):
+def analyze_ticker(ticker_symbol, timeframe_for_change="last 7 days", news_limit=3, ALPHAVANTAGE_API_KEY=None):
     """
-    Analyzes and summarizes the reason behind recent price movements
-    using news and historical price data.
+    Analyzes and summarizes the reason behind recent price movements using news and historical price data.
+    Args:
+        ticker_symbol (str): The stock ticker symbol (e.g., "TSLA").
+        timeframe_for_change (str): The timeframe for analysis (e.g., "last 7 days"). Defaults to "last 7 days".
+        news_limit (int): Number of news articles to consider. Defaults to 3.
+        ALPHAVANTAGE_API_KEY (str): Alpha Vantage API key.
+    Returns:
+        dict: Analysis summary with price, news, and notes.
     """
+    if not ALPHAVANTAGE_API_KEY:
+        return {"error": "Alpha Vantage API key is required."}
+
     analysis_summary = {
         "ticker": ticker_symbol,
         "price_analysis": None,
@@ -13,10 +22,10 @@ def analyze_ticker(ticker_symbol, timeframe_for_change="last 7 days", news_limit
         "combined_notes": []
     }
 
-    price_change_data = get_ticker_price_change(ticker_symbol, timeframe_for_change)
+    price_change_data = get_ticker_price_change(ticker_symbol, timeframe_for_change, ALPHAVANTAGE_API_KEY)
     analysis_summary["price_analysis"] = price_change_data
 
-    news_data = get_ticker_news(ticker_symbol, limit=news_limit)
+    news_data = get_ticker_news(ticker_symbol, ALPHAVANTAGE_API_KEY, news_limit)
     if isinstance(news_data, list) and news_data:
         analysis_summary["recent_news_summary"] = news_data
         news_titles = [n['title'] for n in news_data]
@@ -40,65 +49,3 @@ def analyze_ticker(ticker_symbol, timeframe_for_change="last 7 days", news_limit
         analysis_summary["combined_notes"].insert(0, f"Price change analysis issue: {price_change_data}")
 
     return analysis_summary
-
-if __name__ == "__main__":
-    sample_ticker = "TSLA"
-    analysis = analyze_ticker(sample_ticker, timeframe_for_change="last 7 days", news_limit=3)
-    
-    print(f"--- Analysis for {analysis['ticker']} ---")
-    if isinstance(analysis['price_analysis'], dict):
-        print(f"Price Change ({analysis['price_analysis'].get('timeframe_requested')} from {analysis['price_analysis'].get('start_date_used')} to {analysis['price_analysis'].get('end_date_used')}): {analysis['price_analysis'].get('percent_change')}%")
-    else:
-        print(f"Price Analysis: {analysis['price_analysis']}")
-    
-    print("\nRecent News:")
-    if isinstance(analysis['recent_news_summary'], list):
-        for news_item in analysis['recent_news_summary']:
-            print(f"- ({news_item['time_published']}) {news_item['title']} (Sentiment: {news_item['overall_sentiment_label']})")
-    else:
-        print(analysis['recent_news_summary'])
-        
-    print("\nCombined Notes:")
-    for note in analysis['combined_notes']:
-        print(f"- {note}")
-
-#####################################       Checking the Functionality of the code       #####################################
-
-# if __name__ == '__main__':
-#     sample_ticker = "TSLA"
-#     analysis = analyze_ticker(sample_ticker, timeframe_for_change="last 7 days", news_limit=3)
-    
-#     print(f"--- Analysis for {analysis['ticker']} ---")
-#     if isinstance(analysis['price_analysis'], dict):
-#         print(f"Price Change ({analysis['price_analysis'].get('timeframe_requested')} from {analysis['price_analysis'].get('start_date_used')} to {analysis['price_analysis'].get('end_date_used')} ): {analysis['price_analysis'].get('percent_change')}%")
-#     else:
-#         print(f"Price Analysis: {analysis['price_analysis']}")
-    
-#     print("\nRecent News:")
-#     if isinstance(analysis['recent_news_summary'], list):
-#         for news_item in analysis['recent_news_summary']:
-#             print(f"- ({news_item['time_published']}) {news_item['title']} (Sentiment: {news_item['overall_sentiment_label']})")
-#     else:
-#         print(analysis['recent_news_summary'])
-        
-#     print("\nCombined Notes:")
-#     for note in analysis['combined_notes']:
-#         print(f"- {note}")
-
-#     print("\n--- Analysis for another ticker (NVDA) ---")
-#     analysis_nvda = analyze_ticker("NVDA", timeframe_for_change="today", news_limit=2)
-#     if isinstance(analysis_nvda['price_analysis'], dict):
-#          print(f"Price Change ({analysis_nvda['price_analysis'].get('timeframe')}): {analysis_nvda['price_analysis'].get('percent_change')}%")
-#     else:
-#         print(f"Price Analysis: {analysis_nvda['price_analysis']}")
-
-#     print("\nRecent News:")
-#     if isinstance(analysis_nvda['recent_news_summary'], list):
-#         for news_item in analysis_nvda['recent_news_summary']:
-#             print(f"- ({news_item['time_published']}) {news_item['title']} (Sentiment: {news_item['overall_sentiment_label']})")
-#     else:
-#         print(analysis_nvda['recent_news_summary'])
-
-#     print("\nCombined Notes:")
-#     for note in analysis_nvda['combined_notes']:
-#         print(f"- {note}")

@@ -1,11 +1,12 @@
 import requests
-from config.settings import ALPHAVANTAGE_API_KEY
+import time
 
-def identify_ticker(company_name):
+def identify_ticker(company_name, ALPHAVANTAGE_API_KEY):
     """
     Identifies the stock ticker symbol for a given company name using Alpha Vantage's SYMBOL_SEARCH endpoint.
     Args:
         company_name (str): The name of the company (e.g., "Tesla", "Apple").
+        ALPHAVANTAGE_API_KEY (str): Alpha Vantage API key.
     Returns:
         str: The ticker symbol (e.g., "TSLA") or None if not found or an error occurs.
     """
@@ -19,41 +20,31 @@ def identify_ticker(company_name):
 
     try:
         response = requests.get(url, params=params)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-                if "bestMatches" in data and data["bestMatches"]:
-                    
-                    ticker = data["bestMatches"][0].get("1. symbol")
-                    if ticker:
-                        return ticker
-                    else:
-                        print(f"No ticker found for company: {company_name}")
-                        return None
-                elif "Information" in data:
-                    print(f"API Error for {company_name} symbol search: {data['Information']}")
-                    return None
-                elif "Note" in data:
-                    print(f"API call limit Note: {data['Note']}")
-                    return None
-                else:
-                    print(f"No matching ticker found for {company_name}.")
-                    return None
-            except ValueError:
-                print(f"Error: Could not decode JSON. Response: {response.text}")
-                return None
-        else:
-            print(f"Error: API request failed. Status Code: {response.status_code}, Response: {response.text}")
+        response.raise_for_status()
+        data = response.json()
+        if "bestMatches" in data and data["bestMatches"]:
+            for match in data["bestMatches"]:
+                ticker = match.get("1. symbol")
+                if ticker and "US" in match.get("4. region", ""):
+                    return ticker
+            return data["bestMatches"][0].get("1. symbol")
+        elif "Information" in data or "Note" in data:
+            error_msg = data.get("Information", data.get("Note", "API limit reached or invalid key"))
+            print(f"API Error for {company_name}: {error_msg}")
+            if "call frequency" in error_msg.lower() or "limit" in error_msg.lower():
+                print("Rate limit reached. Waiting 60 seconds...")
+                time.sleep(60)
+                return identify_ticker(company_name, ALPHAVANTAGE_API_KEY)  # Retry
             return None
-    except Exception as e:
-        print(f"Error fetching ticker for {company_name}: {str(e)}")
+        else:
+            print(f"No matching ticker found for {company_name}. Response: {data}")
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"Network error fetching ticker for {company_name}: {e}")
         return None
-
-
-#################################    Checking the functionality   #################################
-# if __name__ == "__main__":
-   
-#     test_companies = ["Tesla", "Apple", "Nonexistent Company"]
-#     for company in test_companies:
-#         ticker = identify_ticker(company)
-#         print(f"Company: {company}, Ticker: {ticker}")
+    except ValueError as e:
+        print(f"JSON decode error for {company_name}: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error for {company_name}: {e}")
+        return None

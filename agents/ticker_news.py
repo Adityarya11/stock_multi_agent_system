@@ -1,9 +1,15 @@
 import requests
-from config.settings import ALPHAVANTAGE_API_KEY
+import time
 
-def get_ticker_news(ticker_symbol, limit=5):
+def get_ticker_news(ticker_symbol, ALPHAVANTAGE_API_KEY, limit=5):
     """
     Retrieves the most recent news about the identified stock from Alpha Vantage.
+    Args:
+        ticker_symbol (str): The stock ticker symbol (e.g., "AAPL").
+        ALPHAVANTAGE_API_KEY (str): Alpha Vantage API key.
+        limit (int): Number of news articles to retrieve. Defaults to 5.
+    Returns:
+        dict: News items or error details.
     """
     url = "https://www.alphavantage.co/query"
     params = {
@@ -16,50 +22,37 @@ def get_ticker_news(ticker_symbol, limit=5):
 
     try:
         response = requests.get(url, params=params)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-                if "feed" in data:
-                    news_items = []
-                    for item in data["feed"][:limit]:
-                        news_items.append({
-                            "title": item.get("title"),
-                            "url": item.get("url"),
-                            "summary": item.get("summary"),
-                            "source": item.get("source"),
-                            "time_published": item.get("time_published"),
-                            "overall_sentiment_label": item.get("overall_sentiment_label")
-                        })
-                    return news_items
-                elif "Information" in data:
-                    print(f"API Error for {ticker_symbol} news: {data['Information']}")
-                    return f"API Error for {ticker_symbol} news: {data['Information']}"
-                elif "Note" in data:
-                    print(f"API call limit Note: {data['Note']}")
-                    return f"API Error for {ticker_symbol} news: {data['Note']}"
-                else:
-                    return f"No news found for {ticker_symbol}."
-            except ValueError:
-                print(f"Error: Could not decode JSON. Response: {response.text}")
-                return f"Error fetching news for {ticker_symbol}: Invalid JSON response."
+        response.raise_for_status()
+        data = response.json()
+        if "feed" in data:
+            news_items = []
+            for item in data["feed"][:limit]:
+                news_items.append({
+                    "title": item.get("title"),
+                    "url": item.get("url"),
+                    "summary": item.get("summary"),
+                    "source": item.get("source"),
+                    "time_published": item.get("time_published"),
+                    "overall_sentiment_label": item.get("overall_sentiment_label")
+                })
+            return {"news": news_items}
+        elif "Information" in data or "Note" in data:
+            error_msg = data.get("Information", data.get("Note", "API limit reached or invalid key"))
+            print(f"API Error for {ticker_symbol} news: {error_msg}")
+            if "call frequency" in error_msg.lower() or "limit" in error_msg.lower():
+                print("Rate limit reached. Waiting 60 seconds...")
+                time.sleep(60)
+                return get_ticker_news(ticker_symbol, ALPHAVANTAGE_API_KEY, limit)  # Retry
+            return {"error": f"API Error for {ticker_symbol} news: {error_msg}"}
         else:
-            print(f"Error: API request failed. Status Code: {response.status_code}, Response: {response.text}")
-            return f"Error fetching news for {ticker_symbol}: HTTP {response.status_code}"
+            print(f"No news found for {ticker_symbol}. Response: {data}")
+            return {"error": f"No news found for {ticker_symbol}."}
+    except requests.exceptions.RequestException as e:
+        print(f"Network error fetching news for {ticker_symbol}: {e}")
+        return {"error": f"Network error fetching news for {ticker_symbol}: {e}"}
+    except ValueError as e:
+        print(f"JSON decode error for {ticker_symbol}: {e}")
+        return {"error": f"JSON decode error for {ticker_symbol}: {e}"}
     except Exception as e:
-        print(f"Error fetching news for {ticker_symbol}: {str(e)}")
-        return f"Error fetching news for {ticker_symbol}: {str(e)}"
-    
-    
-#################################    Checking the functionality   #################################
-
-# if __name__ == "__main__":
-#     sample_ticker = "TSLA"
-#     news = get_ticker_news(sample_ticker)
-#     if isinstance(news, list):
-#         for article in news:
-#             print(f"Title: {article['title']}")
-#             print(f"URL: {article['url']}")
-#             print(f"Sentiment: {article['overall_sentiment_label']}")
-#             print("-" * 20)
-#     else:
-#         print(news)
+        print(f"Unexpected error fetching news for {ticker_symbol}: {e}")
+        return {"error": f"Unexpected error fetching news for {ticker_symbol}: {e}"}

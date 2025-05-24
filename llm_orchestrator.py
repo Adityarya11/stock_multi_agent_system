@@ -6,17 +6,20 @@ from agents.ticker_news import get_ticker_news
 from agents.ticker_price import get_ticker_price
 from agents.ticker_price_change import get_ticker_price_change
 from agents.ticker_analysis import analyze_ticker
-from config.settings import GEMINI_API_KEY
 
+# Prompt for API keys
+ALPHAVANTAGE_API_KEY = input("Enter your Alpha Vantage API Key: ")
+GEMINI_API_KEY = input("Enter your Gemini API Key: ")
 
+# Configure Gemini API
 try:
     genai.configure(api_key=GEMINI_API_KEY)
 except Exception as e:
     print(f"An error occurred configuring Gemini API: {e}")
-    print("Please ensure your GEMINI_API_KEY is correctly set in config.settings.")
+    print("Please ensure your Gemini API key is valid.")
     exit()
 
-# Define Tools for Gemini Model
+# Define Tools
 tools = [
     Tool(
         function_declarations=[
@@ -101,14 +104,15 @@ def run_stock_analysis_agent():
             # Send the user query to the model
             response = chat_session.send_message(user_query)
 
-            # Handle function calls
+            # Collect all function calls in the response
+            function_responses = []
             for part in response.candidates[0].content.parts:
                 if part.function_call:
                     function_call = part.function_call
                     function_name = function_call.name
                     function_args = {key: value for key, value in function_call.args.items()}
 
-                    # Map 'symbol' to 'ticker_symbol' for analyze_ticker and get_ticker_* functions
+                    # Map 'symbol' to 'ticker_symbol' for relevant functions
                     if function_name in ['get_ticker_news', 'get_ticker_price', 'get_ticker_price_change', 'analyze_ticker']:
                         if 'symbol' in function_args:
                             function_args['ticker_symbol'] = function_args.pop('symbol')
@@ -118,22 +122,26 @@ def run_stock_analysis_agent():
                     # Execute the requested function
                     tool_response = None
                     if function_name == 'identify_ticker':
-                        tool_response = identify_ticker(**function_args)
+                        tool_response = identify_ticker(function_args['company_name'], ALPHAVANTAGE_API_KEY)
                     elif function_name == 'get_ticker_news':
-                        tool_response = get_ticker_news(**function_args)
+                        tool_response = get_ticker_news(function_args['ticker_symbol'], ALPHAVANTAGE_API_KEY, function_args.get('limit', 5))
                     elif function_name == 'get_ticker_price':
-                        tool_response = get_ticker_price(**function_args)
+                        tool_response = get_ticker_price(function_args['ticker_symbol'], ALPHAVANTAGE_API_KEY)
                     elif function_name == 'get_ticker_price_change':
-                        tool_response = get_ticker_price_change(**function_args)
+                        tool_response = get_ticker_price_change(function_args['ticker_symbol'], function_args.get('timeframe', 'today'), ALPHAVANTAGE_API_KEY)
                     elif function_name == 'analyze_ticker':
-                        tool_response = analyze_ticker(**function_args)
+                        tool_response = analyze_ticker(function_args['ticker_symbol'], function_args.get('timeframe_for_change', 'last 7 days'), function_args.get('news_limit', 3), ALPHAVANTAGE_API_KEY)
                     else:
                         tool_response = {"error": f"Unknown function: {function_name}"}
 
                     print(f"DEBUG: Function '{function_name}' returned: {tool_response}")
 
-                    # Send the function's response back to the model
-                    response_after_tool = chat_session.send_message(
+                    # Handle string responses (fallback for legacy sub-agent behavior)
+                    if isinstance(tool_response, str):
+                        tool_response = {"error": tool_response}
+
+                    # Append the function response
+                    function_responses.append(
                         genai.protos.Part(
                             function_response=genai.protos.FunctionResponse(
                                 name=function_name,
@@ -141,11 +149,18 @@ def run_stock_analysis_agent():
                             )
                         )
                     )
-                    print("\nAgent Response:")
-                    print(response_after_tool.text)
-                else:
-                    print("\nAgent Response:")
-                    print(part.text)
+
+            # Send all function responses back to the model in one message
+            if function_responses:
+                response_after_tool = chat_session.send_message(function_responses)
+                print("\nAgent Response:")
+                print(response_after_tool.text)
+            else:
+                # Handle non-function-call responses
+                print("\nAgent Response:")
+                for part in response.candidates[0].content.parts:
+                    if part.text:
+                        print(part.text)
 
         except Exception as e:
             print(f"An error occurred: {e}")

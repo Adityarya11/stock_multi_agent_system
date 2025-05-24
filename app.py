@@ -7,16 +7,34 @@ from agents.ticker_news import get_ticker_news
 from agents.ticker_price import get_ticker_price
 from agents.ticker_price_change import get_ticker_price_change
 from agents.ticker_analysis import analyze_ticker
-from config.settings import GEMINI_API_KEY
+
+# Configure Streamlit page
+st.set_page_config(page_title="Stock Analysis Agent", page_icon="📈", layout="wide")
+
+# Sidebar for API key inputs
+st.sidebar.header("API Key Configuration")
+alpha_vantage_key = st.sidebar.text_input("Alpha Vantage API Key:", type="password", key="alpha_vantage_key")
+gemini_api_key = st.sidebar.text_input("Gemini API Key:", type="password", key="gemini_api_key")
+
+# Store keys in session state
+if alpha_vantage_key:
+    st.session_state['ALPHAVANTAGE_API_KEY'] = alpha_vantage_key
+if gemini_api_key:
+    st.session_state['GEMINI_API_KEY'] = gemini_api_key
+
+# Check if both keys are provided
+if not (st.session_state.get('ALPHAVANTAGE_API_KEY') and st.session_state.get('GEMINI_API_KEY')):
+    st.warning("Please enter both Alpha Vantage and Gemini API keys in the sidebar to proceed.")
+    st.stop()
 
 # Configure Gemini API
 try:
-    genai.configure(api_key=GEMINI_API_KEY)
+    genai.configure(api_key=st.session_state['GEMINI_API_KEY'])
 except Exception as e:
-    st.error(f"Error configuring Gemini API: {e}")
+    st.error(f"Error configuring Gemini API: {e}. Please verify your Gemini API key.")
     st.stop()
 
-# Define Tools (same as main.py)
+# Define Tools
 tools = [
     Tool(
         function_declarations=[
@@ -95,48 +113,49 @@ if query_type == "Natural Language":
     query = st.text_input("Enter your stock query:", key="nl_query")
     if st.button("Submit", key="nl_submit"):
         if query:
-            try:
-                chat_session = model.start_chat()
-                response = chat_session.send_message(query)
-                response_text = ""
-                for part in response.candidates[0].content.parts:
-                    if part.function_call:
-                        function_call = part.function_call
-                        function_name = function_call.name
-                        function_args = {key: value for key, value in function_call.args.items()}
-                        if function_name in ['get_ticker_news', 'get_ticker_price', 'get_ticker_price_change', 'analyze_ticker']:
-                            if 'symbol' in function_args:
-                                function_args['ticker_symbol'] = function_args.pop('symbol')
-                        st.write(f"DEBUG: Function call: {function_name} with args: {function_args}")
-                        tool_response = None
-                        if function_name == 'identify_ticker':
-                            tool_response = identify_ticker(**function_args)
-                        elif function_name == 'get_ticker_news':
-                            tool_response = get_ticker_news(**function_args)
-                        elif function_name == 'get_ticker_price':
-                            tool_response = get_ticker_price(**function_args)
-                        elif function_name == 'get_ticker_price_change':
-                            tool_response = get_ticker_price_change(**function_args)
-                        elif function_name == 'analyze_ticker':
-                            tool_response = analyze_ticker(**function_args)
-                        else:
-                            tool_response = {"error": f"Unknown function: {function_name}"}
-                        st.write(f"DEBUG: Function '{function_name}' returned: {tool_response}")
-                        response_after_tool = chat_session.send_message(
-                            genai.protos.Part(
-                                function_response=genai.protos.FunctionResponse(
-                                    name=function_name,
-                                    response=tool_response
+            with st.spinner("Processing..."):
+                try:
+                    chat_session = model.start_chat()
+                    response = chat_session.send_message(query)
+                    response_text = ""
+                    for part in response.candidates[0].content.parts:
+                        if part.function_call:
+                            function_call = part.function_call
+                            function_name = function_call.name
+                            function_args = {key: value for key, value in function_call.args.items()}
+                            if function_name in ['get_ticker_news', 'get_ticker_price', 'get_ticker_price_change', 'analyze_ticker']:
+                                if 'symbol' in function_args:
+                                    function_args['ticker_symbol'] = function_args.pop('symbol')
+                            st.write(f"DEBUG: Function call: {function_name} with args: {function_args}")
+                            tool_response = None
+                            if function_name == 'identify_ticker':
+                                tool_response = identify_ticker(function_args['company_name'], st.session_state['ALPHAVANTAGE_API_KEY'])
+                            elif function_name == 'get_ticker_news':
+                                tool_response = get_ticker_news(function_args['ticker_symbol'], st.session_state['ALPHAVANTAGE_API_KEY'], function_args.get('limit', 5))
+                            elif function_name == 'get_ticker_price':
+                                tool_response = get_ticker_price(function_args['ticker_symbol'], st.session_state['ALPHAVANTAGE_API_KEY'])
+                            elif function_name == 'get_ticker_price_change':
+                                tool_response = get_ticker_price_change(function_args['ticker_symbol'], function_args.get('timeframe', 'today'), st.session_state['ALPHAVANTAGE_API_KEY'])
+                            elif function_name == 'analyze_ticker':
+                                tool_response = analyze_ticker(function_args['ticker_symbol'], function_args.get('timeframe_for_change', 'last 7 days'), function_args.get('news_limit', 3), st.session_state['ALPHAVANTAGE_API_KEY'])
+                            else:
+                                tool_response = {"error": f"Unknown function: {function_name}"}
+                            st.write(f"DEBUG: Function '{function_name}' returned: {tool_response}")
+                            response_after_tool = chat_session.send_message(
+                                genai.protos.Part(
+                                    function_response=genai.protos.FunctionResponse(
+                                        name=function_name,
+                                        response=tool_response
+                                    )
                                 )
                             )
-                        )
-                        response_text = response_after_tool.text
-                    else:
-                        response_text = part.text
-                st.write("**Response:**")
-                st.write(response_text)
-            except Exception as e:
-                st.error(f"An error occurred: {e}")
+                            response_text = response_after_tool.text
+                        else:
+                            response_text = part.text
+                    st.write("**Response:**")
+                    st.markdown(response_text)
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
         else:
             st.warning("Please enter a query.")
 else:
@@ -145,31 +164,32 @@ else:
     news_limit = st.number_input("Number of News Articles:", min_value=1, max_value=10, value=3, key="news_limit")
     if st.button("Submit", key="structured_submit"):
         if company_name:
-            try:
-                ticker = identify_ticker(company_name)
-                if ticker:
-                    tool_response = analyze_ticker(ticker_symbol=ticker, timeframe_for_change=timeframe, news_limit=news_limit)
-                    st.write("**Response:**")
-                    if isinstance(tool_response, dict):
-                        st.write(f"**Ticker**: {tool_response['ticker']}")
-                        if isinstance(tool_response['price_analysis'], dict):
-                            st.write(f"**Price Change** ({tool_response['price_analysis'].get('timeframe_requested')} from {tool_response['price_analysis'].get('start_date_used')} to {tool_response['price_analysis'].get('end_date_used')}): {tool_response['price_analysis'].get('percent_change')}%")
+            with st.spinner("Analyzing..."):
+                try:
+                    ticker = identify_ticker(company_name, st.session_state['ALPHAVANTAGE_API_KEY'])
+                    if ticker:
+                        tool_response = analyze_ticker(ticker_symbol=ticker, timeframe_for_change=timeframe, news_limit=news_limit, ALPHAVANTAGE_API_KEY=st.session_state['ALPHAVANTAGE_API_KEY'])
+                        st.write("**Response:**")
+                        if isinstance(tool_response, dict):
+                            st.markdown(f"**Ticker**: {tool_response['ticker']}")
+                            if isinstance(tool_response['price_analysis'], dict):
+                                st.markdown(f"**Price Change** ({tool_response['price_analysis'].get('timeframe_requested')} from {tool_response['price_analysis'].get('start_date_used')} to {tool_response['price_analysis'].get('end_date_used')}): {tool_response['price_analysis'].get('percent_change')}%")
+                            else:
+                                st.markdown(f"**Price Analysis**: {tool_response['price_analysis']}")
+                            st.markdown("**Recent News**:")
+                            if isinstance(tool_response['recent_news_summary'], list):
+                                for news_item in tool_response['recent_news_summary']:
+                                    st.markdown(f"- ({news_item['time_published']}) {news_item['title']} (Sentiment: {news_item['overall_sentiment_label']})")
+                            else:
+                                st.markdown(tool_response['recent_news_summary'])
+                            st.markdown("**Combined Notes**:")
+                            for note in tool_response['combined_notes']:
+                                st.markdown(f"- {note}")
                         else:
-                            st.write(f"**Price Analysis**: {tool_response['price_analysis']}")
-                        st.write("**Recent News**:")
-                        if isinstance(tool_response['recent_news_summary'], list):
-                            for news_item in tool_response['recent_news_summary']:
-                                st.write(f"- ({news_item['time_published']}) {news_item['title']} (Sentiment: {news_item['overall_sentiment_label']})")
-                        else:
-                            st.write(tool_response['recent_news_summary'])
-                        st.write("**Combined Notes**:")
-                        for note in tool_response['combined_notes']:
-                            st.write(f"- {note}")
+                            st.error(tool_response)
                     else:
-                        st.error(tool_response)
-                else:
-                    st.error(f"Could not find ticker for {company_name}.")
-            except Exception as e:
-                st.error(f"An error occurred: {e}")
+                        st.error(f"Could not find ticker for {company_name}.")
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
         else:
             st.warning("Please enter a company name.")
