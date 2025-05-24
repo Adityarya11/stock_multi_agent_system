@@ -193,3 +193,9 @@ else:
                     st.error(f"An error occurred: {e}")
         else:
             st.warning("Please enter a company name.")
+            
+st.markdown("""
+    <div class="footer">
+        © 2025 Stock Multi Agent System | Powered by Aditya Arya
+    </div>
+""", unsafe_allow_html=True)
