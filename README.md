@@ -234,4 +234,4 @@ For questions or issues, please open a GitHub issue or contact *arya050411@gmail
 
 ---
 
-*Developed by Aditya Arya as part of the AI Software Engineer Intern Task.*
+*Developed by Aditya Arya.*
