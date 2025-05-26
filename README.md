@@ -32,8 +32,7 @@ stock_multi_agent_system/
 ├── README.md                     # Project documentation
 ├── Images/
 │   ├── 1.png                     # CLI response screenshot
-│   ├── 2.png                     # Web UI response screenshot
-├── demo.mp4                      # Video demo (<5 minutes)
+│   ├── 2.png                     # Web 
 ```
 
 ## Setup Instructions
